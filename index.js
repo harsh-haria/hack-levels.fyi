@@ -47,8 +47,8 @@ else {
     // };
 
     const pool = mysql.createPool({
-        // host: 'mysql-db', //prod
-        host: "localhost", //dev
+        host: 'mysql-db', //prod
+        // host: "localhost", //dev
         user: 'dbadmin',
         password: 'dbadmin',
         database: 'hack',
