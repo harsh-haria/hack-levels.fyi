@@ -17,7 +17,6 @@ const redisClient = redis.createClient({
 
 redisClient.on('error', (err) => console.log('Redis Client Error', err));
 
-// Database configuration
 const dbConfig = {
     host: 'mysql-db',
     // host: "localhost", //dev
@@ -28,13 +27,15 @@ const dbConfig = {
 };
 
 const pool = mysql.createPool({
-    host: 'mysql-db',
+    host: 'mysql-db', //prod
+    // host: "localhost", //dev
     user: 'dbadmin',
     password: 'dbadmin',
     database: 'hack',
     waitForConnections: true,
-    connectionLimit: 10, // Maximum number of connections in the pool
-    queueLimit: 0,       // No limit for connection requests
+    connectionLimit: 10,
+    queueLimit: 0,
+    infileStreamFactory: path => fs.createReadStream(path),
 });
 
 // Function to download the file first
@@ -108,7 +109,7 @@ app.post('/injestion', async (req, res) => {
         return res.status(500).json({ error: 'Internal server error' });
     }
     finally {
-        if (connection) connection.release(); // Release the connection back to the pool
+        if (connection) connection.release();
     }
 });
 
@@ -116,7 +117,6 @@ app.post('/injestion', async (req, res) => {
 async function getFilteredData(filters, connection) {
     const { id, type, subtype, location } = filters;
 
-    // Build the base WHERE clause and prepare the filters
     let whereClause = '';
     let whereClauseBase = ' WHERE 1=1 ';
     let whereClauseAddition = '';
@@ -152,7 +152,6 @@ async function getFilteredData(filters, connection) {
 
     const countQuery = `SELECT COUNT(*) AS rowCount FROM sensor_data ${whereClause}`;
 
-    // Query to get the median
     let medianQuery = `
         WITH ordered_readings AS (
             SELECT reading, ROW_NUMBER() OVER (ORDER BY reading) AS row_num,
@@ -170,13 +169,11 @@ async function getFilteredData(filters, connection) {
 
         filterValues = filterValues.flat();
 
-        // Execute both queries in parallel
         const [[countResult], [medianResult]] = await Promise.all([
             connection.execute(countQuery, filterValues),
             connection.execute(medianQuery, filterValues)
         ]);
 
-        await connection.end();
 
         return {
             count: countResult[0].rowCount,
@@ -223,15 +220,44 @@ app.get('/median', async (req, res) => {
         return res.status(500).send();
     }
     finally {
-        if (connection) connection.release(); // Release the connection back to the pool
+        if (connection) connection.release();
     }
 
 });
 
+async function testDatabaseConnectionWithRetry(retries = 12, delay = 5000) {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            const connection = await pool.getConnection();
+            console.log('Successfully connected to the database');
+            connection.release();
+            return true;
+        } catch (error) {
+            console.error(`Failed to connect to the database (Attempt ${attempt} of ${retries}):`, error.message);
+            if (attempt < retries) {
+                console.log(`Retrying in ${delay / 1000} seconds...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            } else {
+                console.error('All retry attempts failed. Could not connect to the database.');
+                return false;
+            }
+        }
+    }
+}
 
-app.listen(PORT, () => {
-    redisClient.connect()
-        .then(() => console.log('Connected to Redis'))
-        .catch(err => console.log('Failed to connect to Redis', err));
-    console.log(`Server is running on port ${PORT}`);
-});
+
+async function startServer() {
+    const connected = await testDatabaseConnectionWithRetry();
+    if (connected) {
+        app.listen(PORT, () => {
+            redisClient.connect()
+                .then(() => console.log('Connected to Redis'))
+                .catch(err => console.log('Failed to connect to Redis', err));
+            console.log(`Server is running on port ${PORT}`);
+        });
+    } else {
+        console.error('Unable to start server due to database connection failure.');
+    }
+}
+
+startServer();
