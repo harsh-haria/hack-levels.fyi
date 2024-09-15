@@ -27,6 +27,16 @@ const dbConfig = {
     infileStreamFactory: path => fs.createReadStream(path)
 };
 
+const pool = mysql.createPool({
+    host: 'mysql-db',
+    user: 'dbadmin',
+    password: 'dbadmin',
+    database: 'hack',
+    waitForConnections: true,
+    connectionLimit: 10, // Maximum number of connections in the pool
+    queueLimit: 0,       // No limit for connection requests
+});
+
 // Function to download the file first
 async function downloadFile(csvUrl, filePath) {
     const response = await axios({
@@ -55,7 +65,10 @@ async function loadCsvIntoDatabase(filePath, connection) {
             IGNORE 1 ROWS
             (id, type, subtype, reading, location, timestamp);
         `;
+        await connection.beginTransaction();
         await connection.query(query, [filePath]);
+        await connection.commit();
+        return;
     } catch (error) {
         console.error(error);
         console.log('bulk csv upload doesnt work');
@@ -64,38 +77,38 @@ async function loadCsvIntoDatabase(filePath, connection) {
 }
 
 app.post('/injestion', async (req, res) => {
+    let connection;
     try {
-
-        // FIRE SET GLOBAL local_infile=ON;
-        // INCRASER THE SIZE OF INNODB BUFFER
-
         let url = req.query.url;
-        const connection = await mysql.createConnection(dbConfig);
-        console.log('Streaming and inserting CSV data...');
+        connection = await pool.getConnection();
 
         const start = performance.now();
 
+        console.log('downloading CSV...');
         await downloadFile(url, filePath);
 
+        console.log('Inserting records now...');
         await loadCsvIntoDatabase(filePath, connection);
 
         const end = performance.now();
 
+        console.log(`Data inserted successfully. Time taken: ${(end - start) / 1000}`);
+
         try {
-            // Flush all keys in the currently selected database
             const succeeded = await redisClient.flushAll();
-            console.log("Redis flushed:", succeeded); // Should print 'OK' if successful
+            console.log("Redis flushed:", succeeded);
         } catch (err) {
             console.error('Failed to flush Redis:', err);
         }
 
-        console.log(`Data inserted successfully. Time taken: ${(end - start) / 1000}`);
         return res.status(200).json({ message: 'Data inserted successfully' });
     } catch (error) {
-        // await conenction.rollback();
-        console.log('rollback');
+        if (connection) await connection.rollback();
         console.error(error);
         return res.status(500).json({ error: 'Internal server error' });
+    }
+    finally {
+        if (connection) connection.release(); // Release the connection back to the pool
     }
 });
 
@@ -178,6 +191,7 @@ async function getFilteredData(filters, connection) {
 
 
 app.get('/median', async (req, res) => {
+    let connection;
     try {
         let input = req.query.filters || '{}';
         const filters = JSON.parse(input);
@@ -194,9 +208,8 @@ app.get('/median', async (req, res) => {
             console.error('Redis GET error:', redisErr);
         }
 
-        const connection = await mysql.createConnection(dbConfig);
+        connection = await pool.getConnection();
         let data = await getFilteredData(filters, connection);
-        await connection.end();
 
         try {
             await redisClient.set(filterKey, JSON.stringify(data));
@@ -209,6 +222,10 @@ app.get('/median', async (req, res) => {
         console.error(error);
         return res.status(500).send();
     }
+    finally {
+        if (connection) connection.release(); // Release the connection back to the pool
+    }
+
 });
 
 
