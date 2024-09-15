@@ -15,12 +15,7 @@ services:
     ports:
       - 3306:3306
     networks:
-      - mynetwork
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 10s
-      retries: 10
-      interval: 10s
+      - mynetw
 
   web:
     image: node:20
@@ -41,23 +36,18 @@ services:
     ports:
       - 5000:3000
     networks:
-      - mynetwork
+      - mynetw
 
   redis:
     image: redis:latest
     ports:
-      - "6379:6379"
+      - 6379:6379
     networks:
-      - mynetwork
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - mynetw
 
 volumes:
   db_data:
 
 networks:
-  mynetwork:
+  mynetw:
     driver: bridge
