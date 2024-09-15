@@ -1,0 +1,5 @@
+node_modules/
+.vscode/
+*.csv
+csvs/
+downloaded_file.csv

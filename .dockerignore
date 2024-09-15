@@ -1,0 +1,8 @@
+node_modules/
+csv\ generator.js
+*.csv
+csvs/
+.vscode/
+index_old.js
+main.js
+new_index.js

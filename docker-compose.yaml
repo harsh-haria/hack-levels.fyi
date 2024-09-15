@@ -1,0 +1,63 @@
+services:
+  
+  mysql-db:
+    image: mysql:8
+    environment:
+      MYSQL_ROOT_PASSWORD: "dbadmin"
+      MYSQL_DATABASE: "hack"
+      MYSQL_USER: "dbadmin"
+      MYSQL_PASSWORD: "dbadmin"
+    volumes:
+      - ./my_OG.cnf:/etc/my.cnf
+      - ./my_OG.cnf:/etc/mysql/my.cnf
+      - ./sql-scripts:/docker-entrypoint-initdb.d
+      - db_data:/var/lib/mysql
+    ports:
+      - 3306:3306
+    networks:
+      - mynetwork
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 10s
+      retries: 10
+      interval: 10s
+
+  web:
+    image: node:20
+    # depends_on:
+    #   mysql-db:
+    #     condition: service_healthy
+    depends_on:
+      - mysql-db
+      - redis
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+    stdin_open: true
+    tty: true
+    ports:
+      - 5000:3000
+    networks:
+      - mynetwork
+
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    networks:
+      - mynetwork
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  db_data:
+
+networks:
+  mynetwork:
+    driver: bridge

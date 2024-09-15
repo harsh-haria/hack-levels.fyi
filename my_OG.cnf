@@ -1,0 +1,66 @@
+# For advice on how to change settings please see
+# http://dev.mysql.com/doc/refman/8.4/en/server-configuration-defaults.html
+
+[mysqld]
+#
+# Remove leading # and set to the amount of RAM for the most important data
+# cache in MySQL. Start at 70% of total RAM for dedicated server, else 10%.
+innodb_buffer_pool_size = 3G
+innodb_buffer_pool_instances = 4
+
+innodb_log_buffer_size = 256M          # Higher log buffer size to handle more transactions
+
+# Redo Log - Larger log size can improve write performance
+innodb_log_file_size = 512M            # Size of each log file
+innodb_log_files_in_group = 2
+
+#innodb_redo_log_capacity needs to be used instead of 2 above.
+
+innodb_file_per_table = 1
+
+innodb_flush_method = O_DIRECT
+
+innodb_flush_neighbors = 0
+
+innodb_read_io_threads = 8             # Increase read threads to parallelize I/O
+innodb_write_io_threads = 8            # Increase write threads
+innodb_io_capacity = 2000              # Higher capacity for SSDs
+
+innodb_flush_log_at_trx_commit = 2
+
+transaction-isolation = READ-COMMITTED
+
+#query_cache_type = 0
+#query_cache_size = 0
+
+thread_cache_size = 16
+
+general_log = 0
+slow_query_log = 0
+
+local_infile = ON
+
+#
+# Remove leading # to turn on a very important data integrity option: logging
+# changes to the binary log between backups.
+# log_bin
+#
+# Remove leading # to set options mainly useful for reporting servers.
+# The server defaults are faster for transactions and fast SELECTs.
+# Adjust sizes as needed, experiment to find the optimal values.
+# join_buffer_size = 128M
+# sort_buffer_size = 2M
+# read_rnd_buffer_size = 2M
+
+host-cache-size=0
+skip-name-resolve
+datadir=/var/lib/mysql
+socket=/var/run/mysqld/mysqld.sock
+secure-file-priv=/var/lib/mysql-files
+user=mysql
+
+pid-file=/var/run/mysqld/mysqld.pid
+[client]
+socket=/var/run/mysqld/mysqld.sock
+
+!includedir /etc/mysql/conf.d/
