@@ -198,7 +198,7 @@ else {
 
             return {
                 count: countResult[0].rowCount,
-                median: medianResult[0].median
+                median: +medianResult[0].median || 0
             };
 
         } catch (error) {
